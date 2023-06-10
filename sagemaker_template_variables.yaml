@@ -1,0 +1,12 @@
+DATASET_NAME: #dataset name eg. complete_dataset.csv
+ROLE_ARN: # sagemaker execution role arn eg. arn:aws:iam::************:role/service-role/AmazonSageMaker-ExecutionRole-***************      
+S3_BUCKET: # bucket name  eg.model-training
+S3_FOLDER: # folder location in bucket eg.ResponseClassifier/code
+S3_OUTPUT_FOLDER: # output folder name eg.ResponseClassifier/output
+S3_TRAINING_OUTPUT_FOLDER: # training output folder name eg. ResponseClassifier
+S3OutputPath: #s3 output path eg. s3://sagemaker-us-east-1-************/
+CONTAINER_IMAGE: # container image eg. ************.dkr.ecr.us-east-1.amazonaws.com/pytorch-inference:1.9.0-cpu-py38
+INFERENCE_IMAGE_FOR_TRAINING: # inference image for training eg. ************.dkr.ecr.us-east-1.amazonaws.com/huggingface-pytorch-inference:1.9.0-transformers4.11.0-cpu-py38-ubuntu20.04
+TRAINING_IMAGE: # training image eg. ************.dkr.ecr.us-east-1.amazonaws.com/huggingface-pytorch-training:1.9.0-transformers4.11.0-gpu-py38-cu111-ubuntu20.04
+PROCESSING_IMAGE: # processing image eg. ************.dkr.ecr.us-east-1.amazonaws.com/sagemaker-scikit-learn:0.23-1-cpu-py3
+MODEL_PACKAGE_GROUP_NAME: # the name of model package group eg., classifiaction

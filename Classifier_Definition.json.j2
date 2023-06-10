@@ -1,0 +1,443 @@
+{
+    "Version": "2020-12-01",
+    "Metadata": {},
+    "Parameters": [
+        {
+            "Name": "ProcessingInstanceCount",
+            "Type": "Integer",
+            "DefaultValue": 1
+        },
+        {
+            "Name": "TrainingInstanceType",
+            "Type": "String",
+            "DefaultValue": "ml.m5.xlarge"
+        },
+        {
+            "Name": "ModelApprovalStatus",
+            "Type": "String",
+            "DefaultValue": "Approved"
+        },
+        {
+            "Name": "InputData",
+            "Type": "String",
+            "DefaultValue": "s3://{{ S3_BUCKET }}/<folder_name>/code/{{ DATASET_NAME }}"
+        },
+        {
+            "Name": "MseThreshold",
+            "Type": "Float",
+            "DefaultValue": 0.8
+        },
+        {
+            "Name": "ModelId",
+            "Type": "String",
+            "DefaultValue": "distilbert-base-uncased"
+        },
+        {
+            "Name": "DatasetName",
+            "Type": "String",
+            "DefaultValue": "{{ DATASET_NAME }}"
+        },
+        {
+            "Name": "TrainingEntryPoint",
+            "Type": "String",
+            "DefaultValue": "train.py"
+        },
+        {
+            "Name": "TrainingSourceDir",
+            "Type": "String",
+            "DefaultValue": "./scripts"
+        },
+        {
+            "Name": "TrainingInstanceCount",
+            "Type": "Integer",
+            "DefaultValue": 1
+        },
+        {
+            "Name": "Epochs",
+            "Type": "String",
+            "DefaultValue": "1"
+        },
+        {
+            "Name": "EvalBatchSize",
+            "Type": "String",
+            "DefaultValue": "32"
+        },
+        {
+            "Name": "TrainBatchSize",
+            "Type": "String",
+            "DefaultValue": "16"
+        },
+        {
+            "Name": "LearningRate",
+            "Type": "String",
+            "DefaultValue": "5e-5"
+        },
+        {
+            "Name": "Fp16",
+            "Type": "String",
+            "DefaultValue": "True"
+        }
+    ],
+    "PipelineExperimentConfig": {
+        "ExperimentName": {
+            "Get": "Execution.PipelineName"
+        },
+        "TrialName": {
+            "Get": "Execution.PipelineExecutionId"
+        }
+    },
+    "Steps": [
+        {
+            "Name": "Classification-DataPreprocessing",
+            "Type": "Processing",
+            "Arguments": {
+                "ProcessingResources": {
+                    "ClusterConfig": {
+                        "InstanceType": "ml.m5.xlarge",
+                        "InstanceCount": {
+                            "Get": "Parameters.ProcessingInstanceCount"
+                        },
+                        "VolumeSizeInGB": 30
+                    }
+                },
+                "AppSpecification": {
+                    "ImageUri": "{{ PROCESSING_IMAGE }}",
+                    "ContainerArguments": [
+                        "--transformers_version",
+                        "4.11.0",
+                        "--pytorch_version",
+                        "1.9.0",
+                        "--model_id",
+                        "distilbert-base-uncased",
+                        "--dataset_name",
+                        "{{ DATASET_NAME }}"
+                    ],
+                    "ContainerEntrypoint": [
+                        "python3",
+                        "/opt/ml/processing/input/code/preprocessing.py"
+                    ]
+                },
+                "RoleArn": "{{ ROLE_ARN }}",
+                "ProcessingInputs": [
+                    {
+                        "InputName": "input-1",
+                        "AppManaged": false,
+                        "S3Input": {
+                            "S3Uri": {
+                                "Get": "Parameters.InputData"
+                            },
+                            "LocalPath": "/opt/ml/processing/input",
+                            "S3DataType": "S3Prefix",
+                            "S3InputMode": "File",
+                            "S3DataDistributionType": "FullyReplicated",
+                            "S3CompressionType": "None"
+                        }
+                    },
+                    {
+                        "InputName": "input-2",
+                        "AppManaged": false,
+                        "S3Input": {
+                            "S3Uri": "s3://{{ S3_BUCKET }}/{{ S3_FOLDER }}/dataset_generator.py",
+                            "LocalPath": "/opt/ml/processing/input/code/dataset_generator_package/",
+                            "S3DataType": "S3Prefix",
+                            "S3InputMode": "File",
+                            "S3DataDistributionType": "FullyReplicated",
+                            "S3CompressionType": "None"
+                        }
+                    },
+                    {
+                        "InputName": "code",
+                        "AppManaged": false,
+                        "S3Input": {
+                            "S3Uri": "s3://{{ S3_BUCKET }}/{{ S3_FOLDER }}/preprocessing.py",
+                            "LocalPath": "/opt/ml/processing/input/code",
+                            "S3DataType": "S3Prefix",
+                            "S3InputMode": "File",
+                            "S3DataDistributionType": "FullyReplicated",
+                            "S3CompressionType": "None"
+                        }
+                    }
+                ],
+                "ProcessingOutputConfig": {
+                    "Outputs": [
+                        {
+                            "OutputName": "train",
+                            "AppManaged": false,
+                            "S3Output": {
+                                "S3Uri": "s3://{{ S3_BUCKET }}/{{ S3_OUTPUT_FOLDER }}/train",
+                                "LocalPath": "/opt/ml/processing/train",
+                                "S3UploadMode": "EndOfJob"
+                            }
+                        },
+                        {
+                            "OutputName": "validation",
+                            "AppManaged": false,
+                            "S3Output": {
+                                "S3Uri": "s3://{{ S3_BUCKET }}/{{ S3_OUTPUT_FOLDER }}/validation",
+                                "LocalPath": "/opt/ml/processing/validation",
+                                "S3UploadMode": "EndOfJob"
+                            }
+                        },
+                        {
+                            "OutputName": "test",
+                            "AppManaged": false,
+                            "S3Output": {
+                                "S3Uri": "s3://{{ S3_BUCKET }}/{{ S3_OUTPUT_FOLDER }}/test",
+                                "LocalPath": "/opt/ml/processing/test",
+                                "S3UploadMode": "EndOfJob"
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "Name": "Classification-Training",
+            "Type": "Training",
+            "Arguments": {
+                "AlgorithmSpecification": {
+                    "TrainingInputMode": "File",
+                    "TrainingImage": "{{ TRAINING_IMAGE }}",
+                    "EnableSageMakerMetricsTimeSeries": true
+                },
+                "OutputDataConfig": {
+                    "S3OutputPath": "s3://{{ S3_BUCKET }}/{{ S3_TRAINING_OUTPUT_FOLDER }}/"
+                },
+                "StoppingCondition": {
+                    "MaxRuntimeInSeconds": 86400
+                },
+                "ResourceConfig": {
+                    "VolumeSizeInGB": 30,
+                    "InstanceCount": 1,
+                    "InstanceType": "ml.p3.2xlarge"
+                },
+                "RoleArn": "{{ ROLE_ARN }}",
+                "InputDataConfig": [
+                    {
+                        "DataSource": {
+                            "S3DataSource": {
+                                "S3DataType": "S3Prefix",
+                                "S3Uri": {
+                                    "Get": "Steps.Classification-DataPreprocessing.ProcessingOutputConfig.Outputs['train'].S3Output.S3Uri"
+                                },
+                                "S3DataDistributionType": "FullyReplicated"
+                            }
+                        },
+                        "ChannelName": "train"
+                    },
+                    {
+                        "DataSource": {
+                            "S3DataSource": {
+                                "S3DataType": "S3Prefix",
+                                "S3Uri": {
+                                    "Get": "Steps.Classification-DataPreprocessing.ProcessingOutputConfig.Outputs['test'].S3Output.S3Uri"
+                                },
+                                "S3DataDistributionType": "FullyReplicated"
+                            }
+                        },
+                        "ChannelName": "test"
+                    }
+                ],
+                "HyperParameters": {
+                    "epochs": {
+                        "Get": "Parameters.Epochs"
+                    },
+                    "eval_batch_size": {
+                        "Get": "Parameters.EvalBatchSize"
+                    },
+                    "train_batch_size": {
+                        "Get": "Parameters.TrainBatchSize"
+                    },
+                    "learning_rate": {
+                        "Get": "Parameters.LearningRate"
+                    },
+                    "model_id": {
+                        "Get": "Parameters.ModelId"
+                    },
+                    "fp16": {
+                        "Get": "Parameters.Fp16"
+                    },
+                    "sagemaker_submit_directory": "\"s3://{{ S3_BUCKET }}/{{ S3_FOLDER }}/trainSource.tar.gz\"",
+                    "sagemaker_program": "\"train.py\"",
+                    "sagemaker_container_log_level": "20",
+                    "sagemaker_region": "\"us-east-1\""
+                },
+                "DebugHookConfig": {
+                    "S3OutputPath": "{{ S3OutputPath }}",
+                    "CollectionConfigurations": []
+                }
+            }
+        },
+        {
+            "Name": "Classification-Evaluation",
+            "Type": "Processing",
+            "Arguments": {
+                "ProcessingResources": {
+                    "ClusterConfig": {
+                        "InstanceType": "ml.m5.xlarge",
+                        "InstanceCount": 1,
+                        "VolumeSizeInGB": 30
+                    }
+                },
+                "AppSpecification": {
+                    "ImageUri": "{{ CONTAINER_IMAGE }}",
+                    "ContainerEntrypoint": [
+                        "python3.8",
+                        "/opt/ml/processing/input/code/evaluate.py"
+                    ]
+                },
+                "RoleArn": "{{ ROLE_ARN }}",
+                "ProcessingInputs": [
+                    {
+                        "InputName": "input-1",
+                        "AppManaged": false,
+                        "S3Input": {
+                            "S3Uri": {
+                                "Get": "Steps.Classification-Training.ModelArtifacts.S3ModelArtifacts"
+                            },
+                            "LocalPath": "/opt/ml/processing/model",
+                            "S3DataType": "S3Prefix",
+                            "S3InputMode": "File",
+                            "S3DataDistributionType": "FullyReplicated",
+                            "S3CompressionType": "None"
+                        }
+                    },
+                    {
+                        "InputName": "input-2",
+                        "AppManaged": false,
+                        "S3Input": {
+                            "S3Uri": {
+                                "Get": "Steps.Classification-DataPreprocessing.ProcessingOutputConfig.Outputs['test'].S3Output.S3Uri"
+                            },
+                            "LocalPath": "/opt/ml/processing/test",
+                            "S3DataType": "S3Prefix",
+                            "S3InputMode": "File",
+                            "S3DataDistributionType": "FullyReplicated",
+                            "S3CompressionType": "None"
+                        }
+                    },
+                    {
+                        "InputName": "code",
+                        "AppManaged": false,
+                        "S3Input": {
+                            "S3Uri": "s3://{{ S3_BUCKET }}/{{ S3_FOLDER }}/evaluate.py",
+                            "LocalPath": "/opt/ml/processing/input/code",
+                            "S3DataType": "S3Prefix",
+                            "S3InputMode": "File",
+                            "S3DataDistributionType": "FullyReplicated",
+                            "S3CompressionType": "None"
+                        }
+                    }
+                ],
+                "ProcessingOutputConfig": {
+                    "Outputs": [
+                        {
+                            "OutputName": "evaluation",
+                            "AppManaged": false,
+                            "S3Output": {
+                                "S3Uri": "s3://{{ S3_BUCKET }}/{{ S3_OUTPUT_FOLDER }}/evaluation",
+                                "LocalPath": "/opt/ml/processing/evaluation",
+                                "S3UploadMode": "EndOfJob"
+                            }
+                        }
+                    ]
+                }
+            },
+            "PropertyFiles": [
+                {
+                    "PropertyFileName": "ClassificationEvaluationReport",
+                    "OutputName": "evaluation",
+                    "FilePath": "evaluation.json"
+                }
+            ]
+        },
+        {
+            "Name": "Classification-EvaluationAccuracy",
+            "Type": "Condition",
+            "Arguments": {
+                "Conditions": [
+                    {
+                        "Type": "GreaterThanOrEqualTo",
+                        "LeftValue": {
+                            "Std:JsonGet": {
+                                "PropertyFile": {
+                                    "Get": "Steps.Classification-Evaluation.PropertyFiles.ClassificationEvaluationReport"
+                                },
+                                "Path": "eval_accuracy"
+                            }
+                        },
+                        "RightValue": {
+                            "Get": "Parameters.MseThreshold"
+                        }
+                    }
+                ],
+                "IfSteps": [
+                    {
+                        "Name": "Classification-RegisterModel",
+                        "Type": "RegisterModel",
+                        "Arguments": {
+                            "ModelPackageGroupName": "{{ MODEL_PACKAGE_GROUP_NAME }}",
+                            "ModelMetrics": {
+                                "ModelQuality": {
+                                    "Statistics": {
+                                        "ContentType": "application/json",
+                                        "S3Uri": "s3://{{ S3_BUCKET }}/{{ S3_OUTPUT_FOLDER }}/evaluation/evaluation.json"
+                                    }
+                                },
+                                "Bias": {},
+                                "Explainability": {}
+                            },
+                            "InferenceSpecification": {
+                                "Containers": [
+                                    {
+                                        "Image": "{{ INFERENCE_IMAGE_FOR_TRAINING }}",
+                                        "Environment": {
+                                            "SAGEMAKER_PROGRAM": "",
+                                            "SAGEMAKER_SUBMIT_DIRECTORY": "",
+                                            "SAGEMAKER_CONTAINER_LOG_LEVEL": "20",
+                                            "SAGEMAKER_REGION": "us-east-1"
+                                        },
+                                        "ModelDataUrl": {
+                                            "Get": "Steps.Classification-Training.ModelArtifacts.S3ModelArtifacts"
+                                        }
+                                    }
+                                ],
+                                "SupportedContentTypes": [
+                                    "text/csv"
+                                ],
+                                "SupportedResponseMIMETypes": [
+                                    "text/csv"
+                                ],
+                                "SupportedRealtimeInferenceInstanceTypes": [
+                                    "ml.t2.medium",
+                                    "ml.m5.xlarge"
+                                ],
+                                "SupportedTransformInstanceTypes": [
+                                    "ml.m5.xlarge"
+                                ]
+                            },
+                            "ModelApprovalStatus": {
+                                "Get": "Parameters.ModelApprovalStatus"
+                            }
+                        }
+                    },
+                    {
+                        "Name": "Classification-CreateModel",
+                        "Type": "Model",
+                        "Arguments": {
+                            "ExecutionRoleArn": "{{ ROLE_ARN }}",
+                            "PrimaryContainer": {
+                                "Image": "{{ CONTAINER_IMAGE }}",
+                                "Environment": {},
+                                "ModelDataUrl": {
+                                    "Get": "Steps.Classification-Training.ModelArtifacts.S3ModelArtifacts"
+                                }
+                            }
+                        }
+                    }
+                ],
+                "ElseSteps": []
+            }
+        }
+    ]
+}
